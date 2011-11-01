@@ -77,7 +77,7 @@ VALUE augeas_exists(VALUE s, VALUE path) {
 
 /*
  * call-seq:
- *   set(PATH, VALUE) -> boolean
+ *   set(PATH, VALUE) -> int
  *
  * Set the value associated with PATH to VALUE. VALUE is copied into the
  * internal data structure. Intermediate entries are created if they don't
@@ -89,14 +89,8 @@ VALUE augeas_set(VALUE s, VALUE path, VALUE value) {
     const char *cvalue = StringValueCStrOrNull(value) ;
 
     int callValue = aug_set(aug, cpath, cvalue) ;
-    VALUE returnValue ;
 
-    if (callValue == 0)
-        returnValue = Qtrue ;
-    else
-        returnValue = Qfalse ;
-
-    return returnValue ;
+    return INT2FIX(callValue);
 }
 
 /*
@@ -182,8 +176,7 @@ VALUE augeas_match(VALUE s, VALUE p) {
 
     cnt = aug_match(aug, path, &matches) ;
     if (cnt < 0)
-        rb_raise(rb_eSystemCallError, "Matching path expression '%s' failed",
-                 path);
+        return -1;
 
     VALUE result = rb_ary_new();
     for (i = 0; i < cnt; i++) {
@@ -197,40 +190,28 @@ VALUE augeas_match(VALUE s, VALUE p) {
 
 /*
  * call-seq:
- *       save() -> boolean
+ *       save() -> int
  *
  * Write all pending changes to disk
  */
 VALUE augeas_save(VALUE s) {
     augeas *aug = aug_handle(s);
-    int callValue = aug_save(aug) ;
-    VALUE returnValue ;
+    int returnValue = aug_save(aug);
 
-    if (callValue == 0)
-        returnValue = Qtrue ;
-    else
-        returnValue = Qfalse ;
-
-    return returnValue ;
+    return INT2FIX(returnValue);
 }
 
 /*
  * call-seq:
- *       load() -> boolean
+ *       load() -> int
  *
  * Load files from disk according to the transforms under +/augeas/load+
  */
 VALUE augeas_load(VALUE s) {
     augeas *aug = aug_handle(s);
     int callValue = aug_load(aug);
-    VALUE returnValue ;
 
-    if (callValue == 0)
-        returnValue = Qtrue ;
-    else
-        returnValue = Qfalse ;
-
-    return returnValue ;
+    return INT2FIX(callValue);
 }
 
 /*
@@ -421,21 +402,21 @@ void Init__augeas() {
 
     /* Define the methods */
     rb_define_singleton_method(c_augeas, "open3", augeas_init, 3);
-    rb_define_method(c_augeas, "defvar", augeas_defvar, 2);
-    rb_define_method(c_augeas, "defnode", augeas_defnode, 3);
-    rb_define_method(c_augeas, "get", augeas_get, 1);
-    rb_define_method(c_augeas, "exists", augeas_exists, 1);
-    rb_define_method(c_augeas, "insert", augeas_insert, 3);
-    rb_define_method(c_augeas, "mv", augeas_mv, 2);
-    rb_define_method(c_augeas, "rm", augeas_rm, 1);
-    rb_define_method(c_augeas, "match", augeas_match, 1);
-    rb_define_method(c_augeas, "save", augeas_save, 0);
-    rb_define_method(c_augeas, "load", augeas_load, 0);
-    rb_define_method(c_augeas, "set_internal", augeas_set, 2);
-    rb_define_method(c_augeas, "setm", augeas_setm, 3);
+    rb_define_private_method(c_augeas, "augeas_defvar", augeas_defvar, 2);
+    rb_define_private_method(c_augeas, "augeas_defnode", augeas_defnode, 3);
+    rb_define_private_method(c_augeas, "augeas_get", augeas_get, 1);
+    rb_define_private_method(c_augeas, "augeas_exists", augeas_exists, 1);
+    rb_define_private_method(c_augeas, "augeas_insert", augeas_insert, 3);
+    rb_define_private_method(c_augeas, "augeas_mv", augeas_mv, 2);
+    rb_define_private_method(c_augeas, "augeas_rm", augeas_rm, 1);
+    rb_define_private_method(c_augeas, "augeas_match", augeas_match, 1);
+    rb_define_private_method(c_augeas, "augeas_save", augeas_save, 0);
+    rb_define_private_method(c_augeas, "augeas_load", augeas_load, 0);
+    rb_define_private_method(c_augeas, "augeas_set", augeas_set, 2);
+    rb_define_private_method(c_augeas, "augeas_setm", augeas_setm, 3);
     rb_define_method(c_augeas, "close", augeas_close, 0);
     rb_define_method(c_augeas, "error", augeas_error, 0);
-    rb_define_method(c_augeas, "span", augeas_span, 1);
+    rb_define_private_method(c_augeas, "augeas_span", augeas_span, 1);
 }
 
 /*

@@ -42,6 +42,18 @@ class TestAugeas < Test::Unit::TestCase
         end
     end
 
+    def test_exists
+      aug = aug_open
+      assert_equal false, aug.exists("/foo")
+      aug.set("/foo", "bar")
+      assert aug.exists("/foo")
+    end
+
+    def test_exists_invalid_path_error
+      aug = aug_open
+      assert_raises(Augeas::InvalidPathError) {aug.exists("[]")}
+    end
+
     def test_close
         aug = Augeas::open("/tmp", nil, Augeas::SAVE_NEWFILE)
         assert_equal("newfile", aug.get("/augeas/save"))
@@ -64,6 +76,35 @@ class TestAugeas < Test::Unit::TestCase
         end
     end
 
+    def test_mv_descendent_error
+      aug = aug_open
+      aug.set("/foo", "bar")
+      assert_raises(Augeas::DescendantError) {aug.mv("/foo", "/foo/bar/baz")}
+    end
+
+    def test_mv_multiple_matches_error
+      aug = aug_open
+      aug.set("/foo/bar", "bar")
+      aug.set("/foo/baz", "baz")
+      assert_raises(Augeas::MultipleMatchesError) {aug.mv("/foo/*", "/qux")}
+    end
+
+    def test_mv_invalid_path_error
+      aug = aug_open
+      assert_raises(Augeas::InvalidPathError) {aug.mv("/foo", "[]")}
+    end
+
+    def test_mv_no_match_error
+      aug = aug_open
+      assert_raises(Augeas::NoMatchError) {aug.mv("/nonexistent", "/")}
+    end
+
+    def test_mv_mutiple_dest_error
+      aug = aug_open
+      aug.set("/foo", "bar")
+      assert_raises(Augeas::CommandExecutionError) {aug.mv("/foo", "/bar/baz/*")}
+    end
+
     def test_load
         aug = aug_open(Augeas::NO_LOAD)
         assert_equal([], aug.match("/files/etc/*"))
@@ -72,6 +113,20 @@ class TestAugeas < Test::Unit::TestCase
             aug.load
         }
         assert_equal([], aug.match("/files/etc/*"))
+    end
+
+    def test_load!_bad_lens
+      aug = aug_open(Augeas::NO_LOAD)
+      aug.transform(:lens => "bad_lens", :incl => "irrelevant")
+      assert_raises(Augeas::LensNotFoundError) { aug.load }
+      assert_equal aug.error[:details], "Could not find lens bad_lens"
+    end
+
+    def test_clear_transforms
+      aug = aug_open
+      assert_not_equal [], aug.match("/augeas/load/*")
+      aug.clear_transforms
+      assert_equal [], aug.match("/augeas/load/*")
     end
 
     def test_transform
@@ -101,6 +156,25 @@ class TestAugeas < Test::Unit::TestCase
                      aug.match("/files/etc/*").sort)
     end
 
+    def test_transform_invalid_path
+      aug = aug_open
+      assert_raises (Augeas::InvalidPathError) {
+        aug.transform :lens => '//', :incl => 'foo' }
+    end
+
+    def test_rm
+      aug = aug_open
+      aug.set("/foo/bar", "baz")
+      assert aug.get("/foo/bar")
+      assert_equal 2, aug.rm("/foo")
+      assert_nil aug.get("/foo")
+    end
+
+    def test_rm_invalid_path
+      aug = aug_open
+      assert_raises(Augeas::InvalidPathError) { aug.rm('//') }
+    end
+
     def test_defvar
         Augeas::open("/dev/null") do |aug|
             aug.set("/a/b", "bval")
@@ -108,11 +182,12 @@ class TestAugeas < Test::Unit::TestCase
             assert aug.defvar("var", "/a/b")
             assert_equal(["/a/b"], aug.match("$var"))
             assert aug.defvar("var", nil)
-            assert_raises(SystemCallError) {
-                aug.match("$var")
-            }
-            assert ! aug.defvar("var", "/foo/")
         end
+    end
+
+    def test_defvar_invalid_path
+      aug = aug_open
+      assert_raises(Augeas::InvalidPathError) { aug.defvar('var', 'F#@!$#@') }
     end
 
     def test_defnode
@@ -121,18 +196,72 @@ class TestAugeas < Test::Unit::TestCase
         assert_equal(["/files/etc/hosts/1"], aug.match("$x"))
     end
 
-    def test_save!
-        aug = aug_open
-        aug.set("/files/etc/hosts/1/garbage", "trash")
-        assert_raises(Augeas::Error) { aug.save! }
+    def test_defnode_invalid_path
+      aug = aug_open
+      assert_raises (Augeas::InvalidPathError) { aug.defnode('x', '//', nil)}
     end
 
-    def test_set!
-        aug = aug_open
-        assert_raises(Augeas::Error) { aug.set!("files/etc/hosts/*", nil) }
+    def test_insert_before
+      aug = aug_open
+      aug.set("/parent/child", "foo")
+      aug.insert("/parent/child", "sibling", true)
+      assert_equal ["/parent/sibling", "/parent/child"], aug.match("/parent/*")
     end
 
-    def test_set
+    def test_insert_after
+      aug = aug_open
+      aug.set("/parent/child", "foo")
+      aug.insert("/parent/child", "sibling", false)
+      assert_equal ["/parent/child", "/parent/sibling"], aug.match("/parent/*")
+    end
+
+    def test_insert_no_match
+      aug = aug_open
+      assert_raises (Augeas::NoMatchError) { aug.insert "foo", "bar", "baz" }
+    end
+
+    def test_insert_invalid_path
+      aug = aug_open
+      assert_raises (Augeas::InvalidPathError) { aug.insert "//", "bar", "baz" }
+    end
+
+    def test_insert_too_many_matches
+      aug = aug_open
+      assert_raises (Augeas::MultipleMatchesError) { aug.insert "/*", "a", "b" }
+    end
+
+    def test_match
+      aug = aug_open
+      aug.set("/foo/bar", "baz")
+      aug.set("/foo/baz", "qux")
+      aug.set("/foo/qux", "bar")
+
+      assert_equal(["/foo/bar", "/foo/baz", "/foo/qux"], aug.match("/foo/*"))
+    end
+
+    def test_match_empty_list
+      aug = aug_open
+      assert_equal([], aug.match("/nonexistent"))
+    end
+
+    def test_match_invalid_path
+      aug = aug_open
+      assert_raises(Augeas::InvalidPathError) { aug.match('//') }
+    end
+
+    def test_save
+      aug = aug_open
+      aug.set("/files/etc/hosts/1/garbage", "trash")
+      assert_raises(Augeas::CommandExecutionError) { aug.save }
+    end
+
+    def test_set_multiple_matches_error
+      aug = aug_open
+      assert_raises(Augeas::MultipleMatchesError) {
+        aug.set("files/etc/hosts/*", nil) }
+    end
+
+    def test_setb
        aug = aug_open
        aug.set("/files/etc/group/disk/user[last()+1]",["user1","user2"])
        assert_equal( aug.get("/files/etc/group/disk/user[1]"),"root" )
@@ -166,11 +295,18 @@ class TestAugeas < Test::Unit::TestCase
         assert_equal( aug.get("/files/etc/group/rpcuser/users"), "testuser2")
     end
 
-    def test_error
+    def test_sm_invalid_path
+      aug = aug_open
+      assert_raises (Augeas::InvalidPathError) { aug.setm("[]", "bar", "baz") }
+    end
+      
+    def test_get_multiple_matches_error
         aug = aug_open
 
         # Cause an error
-        aug.get("/files/etc/hosts/*")
+        assert_raises (Augeas::MultipleMatchesError) { 
+            aug.get("/files/etc/hosts/*") }
+        
         err = aug.error
         assert_equal(Augeas::EMMATCH, err[:code])
         assert err[:message]
@@ -178,11 +314,18 @@ class TestAugeas < Test::Unit::TestCase
         assert err[:minor].nil?
     end
 
+    def test_get_invalid_path
+        aug = aug_open
+        assert_raises (Augeas::InvalidPathError) { aug.get("//") }
+
+        err = aug.error
+        assert_equal(Augeas::EPATHX, err[:code])
+        assert err[:message]
+        assert err[:details]
+    end
+
     def test_span
         aug = aug_open
-
-        span = aug.span("/files/etc/ssh/sshd_config/Protocol")
-        assert_equal({}, span)
 
         aug.set("/augeas/span", "enable")
         aug.rm("/files/etc")
@@ -193,6 +336,60 @@ class TestAugeas < Test::Unit::TestCase
         assert_equal(29..37, span[:label])
         assert_equal(38..39, span[:value])
         assert_equal(29..40, span[:span])
+    end
+
+    def test_span_no_span_info
+      aug = aug_open
+      # this error should be raised because we haven't enabled the span
+      assert_raises(Augeas::NoSpanInfoError) {
+        aug.span("/files/etc/ssh/sshd_config/Protocol") }
+    end
+
+    def test_span_no_matches
+      aug = aug_open
+      assert_raises(Augeas::NoMatchError) { aug.span("bogus") }
+    end
+
+    def test_unknown_error
+      aug = aug_open
+
+      # we want to create a method with a negative return (-1), but
+      # without any error. run_command should throw our error when it
+      # sees this
+      aug.instance_eval do
+        def returns_negative
+          -1
+        end
+        def negative_command
+          run_command :returns_negative
+        end
+      end
+      
+      assert_raises(Augeas::CommandExecutionError) { aug.negative_command }
+    end
+
+    def test_run_command_false_value_no_error
+      aug = aug_open
+
+      aug.instance_eval do
+        def returns_false
+          false
+        end
+        def false_command
+          run_command :returns_false
+        end
+      end
+
+      assert_equal false, aug.false_command
+    end
+
+    def test_save_tree_error
+      aug = aug_open(Augeas::NO_LOAD)
+      aug.set("/files/etc/sysconfig/iptables", "bad")
+      assert_raises(Augeas::CommandExecutionError) {aug.save}
+      assert aug.get("/augeas/files/etc/sysconfig/iptables/error")
+      assert_equal("No such file or directory",
+                   aug.get("/augeas/files/etc/sysconfig/iptables/error/message"))
     end
 
     private
