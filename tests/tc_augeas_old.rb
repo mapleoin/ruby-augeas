@@ -11,7 +11,7 @@ $:.unshift(File::join(TOPDIR, "ext", "augeas"))
 require 'augeas'
 require 'fileutils'
 
-class TestAugeas < Test::Unit::TestCase
+class TestAugeasOld < Test::Unit::TestCase
 
     SRC_ROOT = File::expand_path(File::join(TOPDIR, "tests", "root")) + "/."
     TST_ROOT = File::expand_path(File::join(TOPDIR, "build", "root")) + "/"
