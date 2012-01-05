@@ -79,6 +79,23 @@ class TestAugeas < Test::Unit::TestCase
         }
     end
 
+    def test_load
+        aug = aug_create(Augeas::NO_LOAD)
+        assert_equal([], aug.match("/files/etc/*"))
+        aug.rm("/augeas/load/*");
+        assert_nothing_raised {
+            aug.load
+        }
+        assert_equal([], aug.match("/files/etc/*"))
+    end
+
+    def test_load_bad_lens
+        aug = aug_create(Augeas::NO_LOAD)
+        aug.transform(:lens => "bad_lens", :incl => "irrelevant")
+        assert_raises(Augeas::LensNotFoundError) { aug.load }
+        assert_equal aug.error[:details], "Can not find lens bad_lens"
+    end
+
     def test_rm
         aug = aug_create
         aug.set("/foo/bar", "baz")
