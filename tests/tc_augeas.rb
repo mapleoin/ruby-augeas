@@ -173,6 +173,13 @@ class TestAugeas < Test::Unit::TestCase
         assert_equal [], aug.match("/augeas/load/*")
     end
 
+    def test_clear
+        aug = aug_create
+        aug.set("/foo/bar", "baz")
+        aug.clear("/foo/bar")
+        assert_equal aug.get("/foo/bar"), nil
+    end
+
     def test_rm
         aug = aug_create
         aug.set("/foo/bar", "baz")
@@ -302,6 +309,18 @@ class TestAugeas < Test::Unit::TestCase
         assert_raises (Augeas::InvalidPathError) { aug.setm("[]", "bar", "baz") }
     end
 
+    def test_exists
+        aug = aug_create
+        assert_equal false, aug.exists("/foo")
+        aug.set("/foo", "bar")
+        assert aug.exists("/foo")
+    end
+
+    def test_exists_invalid_path_error
+        aug = aug_create
+        assert_raises(Augeas::InvalidPathError) {aug.exists("[]")}
+    end
+    
     def test_get_multiple_matches_error
         aug = aug_create
 
@@ -338,6 +357,22 @@ class TestAugeas < Test::Unit::TestCase
         assert_equal(-1, aug.srun("foo")[0])
         assert_equal(-1, aug.srun("set")[0])
         assert_equal(-2, aug.srun("quit")[0])
+    end
+
+    def test_defvar_invalid_path
+        aug = aug_create
+        assert_raises(Augeas::InvalidPathError) { aug.defvar('var', 'F#@!$#@') }
+    end
+
+    def test_defnode
+        aug = aug_create
+        assert aug.defnode("x", "/files/etc/hosts/*[ipaddr = '127.0.0.1']", nil)
+        assert_equal(["/files/etc/hosts/1"], aug.match("$x"))
+    end
+
+    def test_defnode_invalid_path
+        aug = aug_create
+        assert_raises (Augeas::InvalidPathError) { aug.defnode('x', '//', nil)}
     end
 
     def test_span
