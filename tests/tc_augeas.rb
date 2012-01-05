@@ -83,6 +83,25 @@ class TestAugeas < Test::Unit::TestCase
         assert_raises(Augeas::InvalidPathError) { aug.rm('//') }
     end
 
+    def test_match
+        aug = aug_create
+        aug.set("/foo/bar", "baz")
+        aug.set("/foo/baz", "qux")
+        aug.set("/foo/qux", "bar")
+
+        assert_equal(["/foo/bar", "/foo/baz", "/foo/qux"], aug.match("/foo/*"))
+    end
+
+    def test_match_empty_list
+        aug = aug_create
+        assert_equal([], aug.match("/nonexistent"))
+    end
+
+    def test_match_invalid_path
+        aug = aug_create
+        assert_raises(Augeas::InvalidPathError) { aug.match('//') }
+    end
+
     def test_set_invalid_path
         aug = aug_create
         assert_raises(Augeas::InvalidPathError) { aug.set("/files/etc//", nil) }
