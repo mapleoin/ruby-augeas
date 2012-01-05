@@ -96,6 +96,46 @@ class TestAugeas < Test::Unit::TestCase
         assert_equal aug.error[:details], "Can not find lens bad_lens"
     end
 
+    def test_transform
+        aug = aug_create(Augeas::NO_LOAD)
+        aug.clear_transforms
+        aug.transform(:lens => "Hosts.lns",
+                      :incl => "/etc/hosts")
+        assert_raise(ArgumentError) {
+            aug.transform(:name => "Fstab",
+                          :incl => [ "/etc/fstab" ],
+                          :excl => [ "*~", "*.rpmnew" ])
+        }
+        aug.transform(:lens => "Inittab.lns",
+                      :incl => "/etc/inittab")
+        aug.transform(:lens => "Fstab.lns",
+                      :incl => "/etc/fstab*",
+                      :excl => "*~")
+        assert_equal(["/augeas/load/Fstab", "/augeas/load/Fstab/excl",
+                      "/augeas/load/Fstab/incl", "/augeas/load/Fstab/lens",
+                      "/augeas/load/Hosts", "/augeas/load/Hosts/incl",
+                      "/augeas/load/Hosts/lens", "/augeas/load/Inittab",
+                      "/augeas/load/Inittab/incl",
+                      "/augeas/load/Inittab/lens"],
+                     aug.match("/augeas/load//*").sort)
+        aug.load
+        assert_equal(["/files/etc/hosts", "/files/etc/inittab"],
+                     aug.match("/files/etc/*").sort)
+    end
+
+    def test_transform_invalid_path
+        aug = aug_create
+        assert_raises (Augeas::InvalidPathError) {
+            aug.transform :lens => '//', :incl => 'foo' }
+    end
+
+    def test_clear_transforms
+        aug = aug_create
+        assert_not_equal [], aug.match("/augeas/load/*")
+        aug.clear_transforms
+        assert_equal [], aug.match("/augeas/load/*")
+    end
+
     def test_rm
         aug = aug_create
         aug.set("/foo/bar", "baz")
