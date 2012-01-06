@@ -38,7 +38,7 @@ class TestAugeas < Test::Unit::TestCase
     TST_ROOT = File::expand_path(File::join(TOPDIR, "build", "root")) + "/"
 
     def test_basics
-        aug = aug_create(Augeas::SAVE_NEWFILE)
+        aug = aug_create(:save_newfile => true)
         assert_equal("newfile", aug.get("/augeas/save"))
         assert_equal(TST_ROOT, aug.get("/augeas/root"))
 
@@ -66,7 +66,7 @@ class TestAugeas < Test::Unit::TestCase
     end
 
     def test_close
-        aug = Augeas::create("/tmp", nil, Augeas::SAVE_NEWFILE)
+        aug = Augeas::create(:root => "/tmp", :save_newfile => true)
         assert_equal("newfile", aug.get("/augeas/save"))
         aug.close
 
@@ -80,7 +80,7 @@ class TestAugeas < Test::Unit::TestCase
     end
 
     def test_mv
-        Augeas::create("/dev/null") do |aug|
+        Augeas::create(:root => "/dev/null") do |aug|
             aug.set("/a/b", "value")
             aug.mv("/a/b", "/x/y")
             assert_equal("value", aug.get("/x/y"))
@@ -117,7 +117,7 @@ class TestAugeas < Test::Unit::TestCase
     end
 
     def test_load
-        aug = aug_create(Augeas::NO_LOAD)
+        aug = aug_create(:no_load => true)
         assert_equal([], aug.match("/files/etc/*"))
         aug.rm("/augeas/load/*");
         assert_nothing_raised {
@@ -127,14 +127,14 @@ class TestAugeas < Test::Unit::TestCase
     end
 
     def test_load_bad_lens
-        aug = aug_create(Augeas::NO_LOAD)
+        aug = aug_create(:no_load => true)
         aug.transform(:lens => "bad_lens", :incl => "irrelevant")
         assert_raises(Augeas::LensNotFoundError) { aug.load }
         assert_equal aug.error[:details], "Can not find lens bad_lens"
     end
 
     def test_transform
-        aug = aug_create(Augeas::NO_LOAD)
+        aug = aug_create(:no_load => true)
         aug.clear_transforms
         aug.transform(:lens => "Hosts.lns",
                       :incl => "/etc/hosts")
@@ -193,6 +193,22 @@ class TestAugeas < Test::Unit::TestCase
         assert_raises(Augeas::InvalidPathError) { aug.rm('//') }
     end
 
+    def test_defvar
+        Augeas::create(:root => "/dev/null") do |aug|
+            aug.set("/a/b", "bval")
+            aug.set("/a/c", "cval")
+            assert aug.defvar("var", "/a/b")
+            assert_equal(["/a/b"], aug.match("$var"))
+            assert aug.defvar("var", nil)
+        end
+    end
+
+    def test_defnode
+        aug = aug_create
+        assert aug.defnode("x", "/files/etc/hosts/*[ipaddr = '127.0.0.1']", nil)
+        assert_equal(["/files/etc/hosts/1"], aug.match("$x"))
+    end
+
     def test_insert_before
         aug = aug_create
         aug.set("/parent/child", "foo")
@@ -248,7 +264,7 @@ class TestAugeas < Test::Unit::TestCase
     end
 
     def test_save_tree_error
-        aug = aug_create(Augeas::NO_LOAD)
+        aug = aug_create(:no_load => true)
         aug.set("/files/etc/sysconfig/iptables", "bad")
         assert_raises(Augeas::CommandExecutionError) {aug.save}
         assert aug.get("/augeas/files/etc/sysconfig/iptables/error")
@@ -401,15 +417,35 @@ class TestAugeas < Test::Unit::TestCase
         assert_raises(Augeas::NoMatchError) { aug.span("bogus") }
     end
 
+    def test_flag_save_noop
+        aug = aug_create(:save_noop => true)
+        assert_equal("noop", aug.get("/augeas/save"))
+    end
+
+    def test_flag_no_load
+        aug = aug_create(:no_load => true)
+        assert_equal([], aug.match("/files/*"))
+    end
+
+    def test_flag_no_modl_autoload
+        aug = aug_create(:no_modl_autoload => true)
+        assert_equal([], aug.match("/files/*"))
+    end
+
+    def test_flag_enable_span
+        aug = aug_create(:enable_span => true)
+        assert_equal("enable", aug.get("/augeas/span"))
+    end
+
     private
 
-    def aug_create(flags = Augeas::NONE)
+    def aug_create(flags={})
         if File::directory?(TST_ROOT)
             FileUtils::rm_rf(TST_ROOT)
         end
         FileUtils::mkdir_p(TST_ROOT)
         FileUtils::cp_r(SRC_ROOT, TST_ROOT)
 
-        Augeas::create(:root => TST_ROOT, :loadpath => nil, :flags => flags)
+        Augeas::create({:root => TST_ROOT, :loadpath => nil}.merge(flags))
     end
 end
